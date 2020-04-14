@@ -4,6 +4,10 @@ import json
 import requests
 import sys
 from dotenv import load_dotenv
+from icalendar import Calendar, Event
+import recurring_ical_events
+from datetime import date, datetime, timedelta
+
 
 def getSSMParameter(nameSSMParameter):
     print("Start: Get SSMParameter")
@@ -29,7 +33,6 @@ def updateSSMParameter(nameSSMParameter,currentSSMParameter,newSSMParameter):
         print(e)
         print ("Error updating SSMParameter")
         sys.exit(1)
-
 def refreshToken(valueSSMParameter):
     print("Start: Refresh Access Token")
     try:
@@ -54,14 +57,61 @@ def refreshToken(valueSSMParameter):
         print(e)
         print ("Error refreshing Access Token ")
         sys.exit(1)
+def getUserId(valueSSMParameter,analystEmail):
+    print("Start: Get User ID")
+    try:
+        auth_parameters = json.loads(valueSSMParameter)
+        headers = {'authorization':"Bearer "+auth_parameters['pd_token'],
+                    'accept':"application/vnd.pagerduty+json;version=2"
+                    }
+        params = {'query':analystEmail}
+        print("Start: External API connection")
+        responseApi = requests.get(url=os.environ["URL_API"]+"/users", headers=headers , params=params)
+        if responseApi.status_code == 200:
+            print ("Successful connection. HTTP STATUS: "+str(responseApi.status_code))
+        else:
+            print("Some error occurs in connection. HTTP STATUS: "+str(responseApi.status_code))
+        userInfo = responseApi.json()
+        response = str(userInfo['users'][0]['id'])
+        print ("UserID: "+response)
+        print("Finish: Get User ID")
+        return (response)
+    except Exception as e: 
+        print(e)
+        print ("Error getting User ID ")
+        sys.exit(1)
+def icsParser():
+    #Adept this part according to your need
+    print ("Start: Calendar Parser")
+    icsURL=os.environ["URL_ICS"]
+    print("Start Calendar connection ")
+    icsCalendar = requests.get(url=icsURL)
+    if icsCalendar.status_code == 200:
+        print ("Successful connection. HTTP STATUS: "+str(icsCalendar.status_code))
+    else:
+        print("Some error occurs in connection. HTTP STATUS: "+str(icsCalendar.status_code))
+    icsCalendar = Calendar.from_ical(icsCalendar.text)
+    today = datetime.today()
+    events = recurring_ical_events.of(icsCalendar).at(today)
+    for event in events:
+        #Update strech if event signature update
+        if "Sobreaviso" in event["SUMMARY"]:
+            print ("Today: "+str(today))
+            print ("START ON-CALL: "+str(event['DTSTART'].dt))
+            print ("END ON-CAL: "+str(event['DTEND'].dt))
+            summary = event['SUMMARY'].splitlines()
+            email = summary[2].split(" - ")
+            print ("ANALYST: "+email[1])
+            return (email[1])
 
 def lambda_handler(event, lambda_context):
     print ("Start Lambda")
     currentSSMParameter = getSSMParameter(os.environ["SSM_PARAMETERS"])
+    analystEmail = icsParser()
+    oncallAnalystID = getUserId(currentSSMParameter,analystEmail)
     newSSMParameter = refreshToken(currentSSMParameter)
     updateToken = updateSSMParameter(os.environ["SSM_PARAMETERS"],currentSSMParameter,newSSMParameter)
-    print(updateToken)
-    print ("Finish Lambda")
+    print("Finish Lambda")
 
 if 'OS' in os.environ:
     load_dotenv()
