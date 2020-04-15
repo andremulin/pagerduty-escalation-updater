@@ -14,6 +14,6 @@
         - Update Token in SSM; (DONE)
     - Parse a *.ics file; (DONE)
     - Get from calendar the analyst of today; (DONE)
-    - Get analyst ID from PagerDuty;(DONE)
-    - Update PagerDuty Escalation;
+    - Get analystID and teamID from PagerDuty;(DONE)
+    - Update PagerDuty Escalation;(DONE)
     - Post in Slack channel a message of update escalation;

@@ -33,6 +33,8 @@ def updateSSMParameter(nameSSMParameter,currentSSMParameter,newSSMParameter):
         print(e)
         print ("Error updating SSMParameter")
         sys.exit(1)
+
+
 def refreshToken(valueSSMParameter):
     print("Start: Refresh Access Token")
     try:
@@ -57,8 +59,8 @@ def refreshToken(valueSSMParameter):
         print(e)
         print ("Error refreshing Access Token ")
         sys.exit(1)
-def getUserId(valueSSMParameter,analystEmail):
-    print("Start: Get User ID")
+def getAnalyst(valueSSMParameter,analystEmail):
+    print("Start: Get Analyst Info")
     try:
         auth_parameters = json.loads(valueSSMParameter)
         headers = {'authorization':"Bearer "+auth_parameters['pd_token'],
@@ -71,15 +73,95 @@ def getUserId(valueSSMParameter,analystEmail):
             print ("Successful connection. HTTP STATUS: "+str(responseApi.status_code))
         else:
             print("Some error occurs in connection. HTTP STATUS: "+str(responseApi.status_code))
+            raise
         userInfo = responseApi.json()
-        response = str(userInfo['users'][0]['id'])
-        print ("UserID: "+response)
-        print("Finish: Get User ID")
+        userID = str(userInfo['users'][0]['id'])
+        userName = str(userInfo['users'][0]['name'])
+        userSelf = str(userInfo['users'][0]['self'])
+        userHtml = str(userInfo['users'][0]['html_url'])
+        teamID = str(userInfo['users'][0]['teams'][0]['id'])
+        response = {'userID':userID,'userName':userName,'userSelf':userSelf,'userHtml':userHtml,'teamID':teamID}
+        print ("UserID: "+response['userID'])
+        print ("TeamID: "+response['teamID'])
+        print("Finish: Get Analyst Info")
         return (response)
     except Exception as e: 
         print(e)
-        print ("Error getting User ID ")
+        print ("Error getting Analyst Info")
         sys.exit(1)
+def getEscalationID(valueSSMParameter,oncallAnalyst):
+    print("Start: Get Escalation Info")
+    try:
+        auth_parameters = json.loads(valueSSMParameter)
+        headers = {'authorization':"Bearer "+auth_parameters['pd_token'],
+                    'accept':"application/vnd.pagerduty+json;version=2"
+                    }
+        params = {'team_ids[]':oncallAnalyst['teamID']}
+        print("Start: External API connection")
+        responseApi = requests.get(url=os.environ["URL_API"]+"/escalation_policies", headers=headers , params=params)
+        if responseApi.status_code == 200:
+            print("Successful connection. HTTP STATUS: "+str(responseApi.status_code))
+        else:
+            print("Some error occurs in connection. HTTP STATUS: "+str(responseApi.status_code))
+            raise
+        escalationInfo = responseApi.json()
+        escalationID = escalationInfo['escalation_policies'][0]['id']
+        escalationRules = escalationInfo['escalation_policies'][0]['escalation_rules']
+        if oncallAnalyst['userID'] == escalationRules[0]['targets'][0]['id']:
+            print("The analyst is already on-call.")
+            print("Stop: Get Escalation Info")
+            return False
+        else:
+            print("The on-call escalation need update.")
+            print("Stop: Get Escalation Info")
+            return {'id':escalationID,'rules':escalationRules}
+    except Exception as e:
+        print(e)
+        print ("Error getting Escalation Info")
+        sys.exit(1)
+def updateEscalation(valueSSMParameter,oncallAnalyst,escalationInfo):
+    print("Start: Escalation Update")
+    try:
+        auth_parameters = json.loads(valueSSMParameter)
+        headers = {'authorization':"Bearer "+auth_parameters['pd_token'],
+                    'accept':"application/vnd.pagerduty+json;version=2",
+                    'content-type':"application/json"
+                    }
+        body = json.dumps(
+                            {
+                                "escalation_policy": {
+                                    "type": "escalation_policy",
+                                    "id": escalationInfo['id'],
+                                    "escalation_rules": [
+                                        {
+                                            "id": escalationInfo['rules']['0']['id'],
+                                            "escalation_delay_in_minutes": escalationInfo['rules'][0]['escalation_delay_in_minutes'],
+                                            "targets": [
+                                                {
+                                                    "id": oncallAnalyst['userID'],
+                                                    "type": "user_reference"
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        )
+        print("Start: External API connection")
+        responseApi = requests.put(url=os.environ["URL_API"]+"/escalation_policies/PJWAEZY", headers=headers , data=body)
+        if responseApi.status_code == 200:
+            print("Successful connection. HTTP STATUS: "+str(responseApi.status_code))
+        else:
+            print("Some error occurs in connection. HTTP STATUS: "+str(responseApi.status_code))
+            raise
+        print(responseApi.json())
+ 
+    except Exception as e: 
+        print(e)
+        print ("Error updating Escalation Update")
+        sys.exit(1)
+
+
 def icsParser():
     #Adept this part according to your need
     print ("Start: Calendar Parser")
@@ -108,9 +190,15 @@ def lambda_handler(event, lambda_context):
     print ("Start Lambda")
     currentSSMParameter = getSSMParameter(os.environ["SSM_PARAMETERS"])
     analystEmail = icsParser()
-    oncallAnalystID = getUserId(currentSSMParameter,analystEmail)
-    newSSMParameter = refreshToken(currentSSMParameter)
-    updateToken = updateSSMParameter(os.environ["SSM_PARAMETERS"],currentSSMParameter,newSSMParameter)
+    oncallAnalyst = getAnalyst(currentSSMParameter,analystEmail)
+    escalationInfo = getEscalationID(currentSSMParameter,oncallAnalyst)
+    if escalationInfo is False:
+        print("Not necessary update the On-Call Escalation")
+    else:
+        print("it will necessary update the On-Call Escalation")
+        updateEscalation(currentSSMParameter,oncallAnalyst,escalationInfo)
+    #newSSMParameter = refreshToken(currentSSMParameter)
+    #updateToken = updateSSMParameter(os.environ["SSM_PARAMETERS"],currentSSMParameter,newSSMParameter)
     print("Finish Lambda")
 
 if 'OS' in os.environ:
