@@ -2,6 +2,6 @@
 pyvenv.cfg
 Lib
 *.zip
-parameters.json
+*.json
 scripts
 .vscode
