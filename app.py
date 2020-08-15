@@ -30,6 +30,7 @@ def getSSMParameter(nameSSMParameter):
         print(e)
         print ("Error getting SSMParameter")
         sys.exit(1)
+
 def updateSSMParameter(nameSSMParameter,currentSSMParameter,newSSMParameter):
     print("Start: Update SSMParameter")
     try:
@@ -44,7 +45,6 @@ def updateSSMParameter(nameSSMParameter,currentSSMParameter,newSSMParameter):
         print(e)
         print ("Error updating SSMParameter")
         sys.exit(1)
-
 
 def refreshToken(currentSSMParameter):
     print("Start: Refresh Access Token")
@@ -70,6 +70,7 @@ def refreshToken(currentSSMParameter):
         print(e)
         print ("Error refreshing Access Token ")
         sys.exit(1)
+
 def getAnalyst(currentSSMParameter,analystToday):
     print("Start: Get Analyst Info")
     try:
@@ -98,6 +99,7 @@ def getAnalyst(currentSSMParameter,analystToday):
         print(e)
         print ("Error getting Analyst Info")
         sys.exit(1)
+
 def getEscalationID(currentSSMParameter,oncallAnalyst):
     print("Start: Get Escalation Info")
     try:
@@ -126,6 +128,7 @@ def getEscalationID(currentSSMParameter,oncallAnalyst):
         print(e)
         print ("Error getting Escalation Info")
         sys.exit(1)
+
 def updateEscalation(currentSSMParameter,oncallAnalyst,escalationInfo):
     print("Start: Escalation Update")
     try:
@@ -158,7 +161,6 @@ def updateEscalation(currentSSMParameter,oncallAnalyst,escalationInfo):
         print ("Error updating Escalation Update")
         sys.exit(1)
 
-
 def icsParser(currentSSMParameter):
     #Adept this part according to your need
     auth_parameters = json.loads(currentSSMParameter)
@@ -181,8 +183,9 @@ def icsParser(currentSSMParameter):
             print ("END ON-CAL: "+str(event['DTEND'].dt))
             summary = event['SUMMARY'].splitlines()
             email = summary[2].split(" - ")
-            print ("ANALYST EMAIL: "+email[1])
-            response = {'email':email[1]}
+            email = email[1].strip()
+            print ("ANALYST EMAIL: "+email)
+            response = {'email':email}
             return (response)
 
 def lambda_handler(event, lambda_context):
